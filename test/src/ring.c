@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
         MPI_Abort(MPI_COMM_WORLD, 2);
     }
 
-    ret = MPIX_Init_stream();
+    ret = MPIX_Init();
     if (ret) {
         printf("Failed to initialize MPI on-stream support\n");
         MPI_Abort(MPI_COMM_WORLD, 2);
@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
 
     MPI_Allreduce(MPI_IN_PLACE, &errs, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
-    MPIX_Finalize_stream();
+    MPIX_Finalize();
 
     MPI_Finalize();
 

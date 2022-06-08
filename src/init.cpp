@@ -145,7 +145,7 @@ static void progress_thread_fn(void) {
 }
 
 
-int MPIX_Init_stream(void) {
+int MPIX_Init(void) {
     int initialized, finalized, thread_level;
     int err = 0;
     int device;
@@ -235,7 +235,7 @@ out:
     return err;
 }
 
-int MPIX_Finalize_stream(void) {
+int MPIX_Finalize(void) {
     int err = 0;
 
     progress_thread_exit.store(1, std::memory_order_release);

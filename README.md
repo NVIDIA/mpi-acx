@@ -51,7 +51,10 @@ __host__ int MPIX_Parrived(MPIX_Request request, int partition, int *flag);
 __device__ int MPIX_Pready(int partition, MPIX_Prequest request);
 __device__ int MPIX_Parrived(MPIX_Prequest request, int partition, int *flag);
 
-/* HELPER FUNCTIONS FOR PARTITIONED OPERATIONS: ******************************/
+/* HELPER FUNCTIONS: *********************************************************/
+
+int MPIX_Init(void);
+int MPIX_Finalize(void);
 
 int MPIX_Start(MPIX_Request *request);
 int MPIX_Startall(int count, MPIX_Request *request);
@@ -106,6 +109,17 @@ stream uses one flag; however, a partitioned operation uses one flag per
 partition. On-stream operations interact with flags either through CUDA stream
 memory operations or CUDA kernels. In-graph operations interact with flags
 through CUDA kernels.
+
+# Relation to the MPI Standard
+
+MPI-ACX is a prototype of APIs that are proposed for inclusion in the MPI
+standard. Users should expect that if these APIs are integrated in MPI, the
+`MPIX_Request` type would be replaced by the standard `MPI_Request` type and
+that any functionality in the helper functions (e.g. `MPIX_Init` or
+`MPIX_Start`) would be merged into these existing MPI functions (e.g.
+`MPI_Init` or `MPI_Start`). That is, the existence of "MPIX" variants of
+existing MPI objects and APIs is a consequence of prototyping and not a
+proposed addition to the MPI standard.
 
 # Environment variables
 

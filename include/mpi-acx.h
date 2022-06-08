@@ -45,8 +45,8 @@ typedef void * MPIX_Prequest;
 #define MPIX_REQUEST_NULL  NULL
 #define MPIX_PREQUEST_NULL NULL
 
-int MPIX_Init_stream(void);
-int MPIX_Finalize_stream(void);
+int MPIX_Init(void);
+int MPIX_Finalize(void);
 
 /* ENQUEUED OPERATIONS: ******************************************************/
 
