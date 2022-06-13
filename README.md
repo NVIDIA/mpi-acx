@@ -8,6 +8,8 @@ The prototype currently supports a hybrid MPI+CUDA programming model.
 
 # Requirements
 
+MPI-ACX requires CUDA 11.3 or later.
+
 The MPI library must support the partitioned communication API introduced in
 MPI 4.0. The MPI library must be initialized with support for the
 `MPI_THREAD_MULTIPLE` threading model.  If communication will involve GPU
