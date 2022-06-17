@@ -1,6 +1,6 @@
 NVCC ?= nvcc
 MPI_HOME ?= /usr
-NVCC_GENCODE ?= -gencode=arch=compute_70,code=sm_70
+NVCC_GENCODE ?= -gencode=arch=compute_80,code=sm_80
 
 NVCUFLAGS ?= -I$(MPI_HOME)/include -L$(MPI_HOME)/lib $(NVCC_GENCODE) -dc
 NVCUFLAGS += -Xcompiler -Wall,-Wextra,-Wno-unused-function,-Wno-unused-parameter
