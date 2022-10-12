@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
     int send[NUM_PARTITIONS], recv[NUM_PARTITIONS];
     MPI_Status status[2];
     MPIX_Request req[2];
-    MPIX_Prequest preq;
+    MPIX_Prequest preq[2];
 
     for (int i = 0; i < NUM_PARTITIONS; i++) {
         send[i] = (world_rank + i) % world_size;
@@ -95,15 +95,16 @@ int main(int argc, char **argv) {
                     (world_rank + world_size - 1) % world_size,
                     0, MPI_COMM_WORLD, MPI_INFO_NULL, &req[1]);
 
-    MPIX_Prequest_create(req[0], &preq);
+    MPIX_Prequest_create(req[0], &preq[0]);
+    MPIX_Prequest_create(req[1], &preq[1]);
 
     for (int iter = 0; iter < NUM_ITER; iter++) {
         if (world_rank == 0) printf("********** ITERATION %d **********\n", iter);
 
         MPIX_Startall(2, req);
 
-        mark_ready<<<1, NUM_PARTITIONS, 0, 0>>>(preq);
-        wait_until_arrived<<<1, NUM_PARTITIONS, 0, 0>>>(preq);
+        mark_ready<<<1, NUM_PARTITIONS, 0, 0>>>(preq[0]);
+        wait_until_arrived<<<1, NUM_PARTITIONS, 0, 0>>>(preq[1]);
 
         curet = cudaStreamSynchronize(0);
         if (curet != cudaSuccess) {
@@ -125,7 +126,8 @@ int main(int argc, char **argv) {
         for (int i = 0; i < NUM_PARTITIONS; i++) send[i]++;
     }
 
-    MPIX_Prequest_free(&preq);
+    MPIX_Prequest_free(&preq[0]);
+    MPIX_Prequest_free(&preq[1]);
     MPIX_Request_free(&req[0]);
     MPIX_Request_free(&req[1]);
 

@@ -31,6 +31,16 @@
 #include <mpi-acx.h>
 #include <mpi-acx-internal.h>
 
+#ifdef USE_MEMOPS_V2
+#define wrapWriteValue cuStreamWriteValue32_v2
+#define wrapWaitValue  cuStreamWaitValue32_v2
+#define wrapBatchMemOp cuStreamBatchMemOp_v2
+#else
+#define wrapWriteValue cuStreamWriteValue32
+#define wrapWaitValue  cuStreamWaitValue32
+#define wrapBatchMemOp cuStreamBatchMemOp
+#endif
+
 __global__ void set(volatile int *ptr, int val) {
     *ptr = val;
     DEBUGMSG_D("Set  on %p completed\n", ptr);
@@ -145,12 +155,8 @@ int MPIX_Isend_enqueue(const void *buf, int count, MPI_Datatype datatype, int de
 
         // TODO: memOps currently not supported on graphs
         if (mpiacx_state->use_memops && !capture_enabled) {
-            CUdeviceptr dptr;
             CU_CHECK_AND_JMP(err, out,
-                    cuMemHostGetDevicePointer(&dptr, (void*) mpiacx_state->flags_d, 0));
-
-            CU_CHECK_AND_JMP(err, out,
-                    cuStreamWriteValue32(stream, dptr+(idx*sizeof(int)),
+                    wrapWriteValue(stream, mpiacx_state->flags_d_ptr + (idx*sizeof(int)),
                                         MPIACX_OP_STATE_PENDING,
                                         CU_STREAM_WRITE_VALUE_DEFAULT));
         }
@@ -251,12 +257,8 @@ int MPIX_Irecv_enqueue(void *buf, int count, MPI_Datatype datatype, int source,
 
         // TODO: memOps currently not supported on graphs
         if (mpiacx_state->use_memops && !capture_enabled) {
-            CUdeviceptr dptr;
             CU_CHECK_AND_JMP(err, out,
-                    cuMemHostGetDevicePointer(&dptr, (void*) mpiacx_state->flags_d, 0));
-
-            CU_CHECK_AND_JMP(err, out,
-                    cuStreamWriteValue32(stream, dptr+(idx*sizeof(int)),
+                    wrapWriteValue(stream, mpiacx_state->flags_d_ptr + (idx*sizeof(int)),
                                         MPIACX_OP_STATE_PENDING,
                                         CU_STREAM_WRITE_VALUE_DEFAULT));
         }
@@ -363,17 +365,13 @@ int MPIX_Wait_enqueue(MPIX_Request *req, MPI_Status *status, int qtype, void *qu
 
         // TODO: memOps currently not supported on graphs
         if (mpiacx_state->use_memops && !capture_enabled) {
-            CUdeviceptr dptr;
 
             if (try_complete_wait_op(idx)) {
                 goto cleanup;
             }
 
-            CU_CHECK_AND_JMP(err, out,
-                    cuMemHostGetDevicePointer(&dptr, (void*) mpiacx_state->flags_d, 0));
-
             CU_CHECK_AND_JMP(err, out, 
-                    cuStreamWaitValue32(stream, dptr+(idx*sizeof(int)),
+                    wrapWaitValue(stream, mpiacx_state->flags_d_ptr + (idx*sizeof(int)),
                                         MPIACX_OP_STATE_COMPLETED,
                                         CU_STREAM_WAIT_VALUE_EQ
 #ifdef FLUSH_REMOTE_WRITES
@@ -382,7 +380,7 @@ int MPIX_Wait_enqueue(MPIX_Request *req, MPI_Status *status, int qtype, void *qu
                                         ));
 
             CU_CHECK_AND_JMP(err, out,
-                    cuStreamWriteValue32(stream, dptr+(idx*sizeof(int)),
+                    wrapWriteValue(stream, mpiacx_state->flags_d_ptr + (idx*sizeof(int)),
                                         MPIACX_OP_STATE_CLEANUP,
                                         CU_STREAM_WRITE_VALUE_DEFAULT));
         }
@@ -480,11 +478,7 @@ int MPIX_Waitall_enqueue(int count, MPIX_Request *reqs, MPI_Status *statuses, in
 
         if (mpiacx_state->use_memops && !capture_enabled) {
             CUresult cu_ret = CUDA_SUCCESS;
-            CUdeviceptr dptr;
             int num_memops = 0;
-
-            CU_CHECK_AND_JMP(err, out,
-                    cuMemHostGetDevicePointer(&dptr, (void*) mpiacx_state->flags_d, 0));
 
             params = (CUstreamBatchMemOpParams *) calloc(2 * count, sizeof(CUstreamBatchMemOpParams));
             NULL_CHECK_AND_JMP(err, out, params);
@@ -494,7 +488,7 @@ int MPIX_Waitall_enqueue(int count, MPIX_Request *reqs, MPI_Status *statuses, in
 
                 if (!try_complete_wait_op(idx)) {
                     params[num_memops].waitValue.operation = CU_STREAM_MEM_OP_WAIT_VALUE_32;
-                    params[num_memops].waitValue.address   = dptr+(idx*sizeof(int));
+                    params[num_memops].waitValue.address   = mpiacx_state->flags_d_ptr + (idx*sizeof(int));
                     params[num_memops].waitValue.value     = MPIACX_OP_STATE_COMPLETED;
                     params[num_memops].waitValue.flags     = CU_STREAM_WAIT_VALUE_EQ;
 #ifdef FLUSH_REMOTE_WRITES
@@ -502,7 +496,7 @@ int MPIX_Waitall_enqueue(int count, MPIX_Request *reqs, MPI_Status *statuses, in
 #endif
 
                     params[num_memops+1].writeValue.operation = CU_STREAM_MEM_OP_WRITE_VALUE_32;
-                    params[num_memops+1].writeValue.address   = dptr+(idx*sizeof(int));
+                    params[num_memops+1].writeValue.address   = mpiacx_state->flags_d_ptr + (idx*sizeof(int));
                     params[num_memops+1].writeValue.value     = MPIACX_OP_STATE_CLEANUP;
                     params[num_memops+1].writeValue.flags     = CU_STREAM_WRITE_VALUE_DEFAULT; // TODO: It should be safe to set CU_STREAM_WRITE_VALUE_NO_MEMORY_BARRIER
 
@@ -511,7 +505,7 @@ int MPIX_Waitall_enqueue(int count, MPIX_Request *reqs, MPI_Status *statuses, in
             }
 
             if (num_memops > 0)
-                cu_ret = cuStreamBatchMemOp(stream, 2 * count, params, 0);
+                cu_ret = wrapBatchMemOp(stream, 2 * count, params, 0);
 
             free(params);
 
@@ -603,7 +597,7 @@ int MPIX_Wait(MPIX_Request *req, MPI_Status *status) {
         DEBUGMSG("Host wait on %p completed\n", ptr);
 
         if (status != MPI_STATUS_IGNORE)
-            memcpy(status, &op->sendrecv.status, sizeof(MPI_Status));
+            memcpy(status, &op->sendrecv.status_save, sizeof(MPI_Status));
 
         mpiacx_triggered_slot_free(idx);
 
@@ -611,6 +605,7 @@ int MPIX_Wait(MPIX_Request *req, MPI_Status *status) {
         *req = MPIX_REQUEST_NULL;
     }
     else if (ireq->kind == MPIACX_REQ_PARTITIONED) {
+#ifdef USE_MPI_PARTITIONED
         size_t *idx = ireq->partitioned.flag_idx;
 
         // Wait for proxy to finish processing pready/parrived calls
@@ -630,6 +625,10 @@ int MPIX_Wait(MPIX_Request *req, MPI_Status *status) {
         // be completed here.
 
         MPI_Wait(&ireq->partitioned.request, status);
+#else
+        ERRMSG("Host wait on partitioned op, but partitioned support is disabled\n");
+        return 1;
+#endif
     }
     else {
         ERRMSG("Invalid request kind (%d)\n", ireq->kind);

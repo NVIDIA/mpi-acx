@@ -31,8 +31,8 @@ int MPIX_Isend_enqueue(const void *buf, int count, MPI_Datatype datatype, int de
 int MPIX_Irecv_enqueue(void *buf, int count, MPI_Datatype datatype, int source,
                        int tag, MPI_Comm comm, MPIX_Request *request, int qtype, void *queue);
 
-int MPIX_Wait_enqueue(MPIX_Request *req, int qtype, void *queue);
-int MPIX_Waitall_enqueue(int count, MPIX_Request *reqs, int qtype, void *queue);
+int MPIX_Wait_enqueue(MPIX_Request *req, MPI_Status *status, int qtype, void *queue);
+int MPIX_Waitall_enqueue(int count, MPIX_Request *reqs, MPI_Status *statuses, int qtype, void *queue);
 
 /* PARTITIONED OPERATIONS: ***************************************************/
 
@@ -77,6 +77,8 @@ The following optional Make variables can be set:
 * NVCC - NVIDIA compiler command (e.g. nvcc)
 * MPI_HOME - MPI library location (e.g. /usr)
 * NVCC_GENCODE - NVCC Gencode options (e.g. -gencode=arch=compute_80,code=sm_80)
+* MPI_ACX_PARTITIONED_SUPPORT - Set to 0 to disable partitioned communication support
+* MPI_ACX_MEMOPS_V2 - Set to 1 to use memOps v2 (requires CUDA 11.7 or later)
 
 Building MPI-ACX:
 
@@ -167,3 +169,11 @@ Below is a listing of current limitations:
 * In-graph operations must be completed by a wait operation performed within a graph.
 
 * Partitioned operation start and wait operations currently must be performed on the CPU.
+
+* MPI-ACX currently does not support the MPI non-overtaking semantic.
+  `MPI_Isend` and `MPI_Irecv` operations are posted in an arbitrary order after
+  they are enabled through their corresponding stream or graph. This will be
+  fixed in a future release.
+
+# Author
+Jim Dinan, @jdinan jdinan at nvidia dot com

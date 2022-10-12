@@ -259,6 +259,7 @@ typedef struct {
     size_t        nflags;
     volatile int *flags;
     volatile int *flags_d;
+    CUdeviceptr   flags_d_ptr;
     MPIACX_Op    *op;
 } MPIACX_State;
 

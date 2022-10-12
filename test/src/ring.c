@@ -65,9 +65,15 @@ int main(int argc, char **argv) {
 
     printf("Hello from %d of %d\n", world_rank, world_size);
 
-    int send = world_rank + 1, recv = 0;
+    int expected, recv;
+    int send = world_rank + 1;
     MPIX_Request req[2];
+    MPI_Status status;
     cudaStream_t stream = 0;
+
+    /** Test on-stream send/recv and CPU Wait **/
+
+    recv = -1;
 
     MPIX_Isend_enqueue(&send, 1, MPI_INT, (world_rank + 1) % world_size,
                       0, MPI_COMM_WORLD, &req[0], MPIX_QUEUE_CUDA_STREAM, &stream);
@@ -75,7 +81,7 @@ int main(int argc, char **argv) {
                       0, MPI_COMM_WORLD, &req[1], MPIX_QUEUE_CUDA_STREAM, &stream);
 
     MPIX_Wait_enqueue(&req[0], MPI_STATUS_IGNORE, MPIX_QUEUE_CUDA_STREAM, &stream);
-    MPIX_Wait_enqueue(&req[1], MPI_STATUS_IGNORE, MPIX_QUEUE_CUDA_STREAM, &stream);
+    MPIX_Wait_enqueue(&req[1], &status, MPIX_QUEUE_CUDA_STREAM, &stream);
 
     ret = cudaStreamSynchronize(stream);
     if (ret != cudaSuccess) {
@@ -83,10 +89,55 @@ int main(int argc, char **argv) {
         MPI_Abort(MPI_COMM_WORLD, 2);
     }
 
-    int expected = (world_rank + world_size - 1) % world_size + 1;
+    expected = (world_rank + world_size - 1) % world_size + 1;
     if (recv != expected) {
         printf("[%2d] Error: Sent %d, received %d, expected %d\n",
                 world_rank, send, recv, expected);
+        ++errs;
+    }
+
+    if (status.MPI_SOURCE != (world_rank + world_size - 1) % world_size) {
+        printf("Incorrect source in status: %d\n", status.MPI_SOURCE);
+        ++errs;
+    }
+    if (status.MPI_TAG != 0) {
+        printf("Incorrect tag in status: %d\n", status.MPI_TAG);
+        ++errs;
+    }
+    if (status.MPI_ERROR != MPI_SUCCESS) {
+        printf("Incorrect error in status: %d\n", status.MPI_ERROR);
+        ++errs;
+    }
+
+    /** Test on-stream send/recv and host Wait **/
+
+    recv = -1;
+
+    MPIX_Isend_enqueue(&send, 1, MPI_INT, (world_rank + 1) % world_size,
+                      1, MPI_COMM_WORLD, &req[0], MPIX_QUEUE_CUDA_STREAM, &stream);
+    MPIX_Irecv_enqueue(&recv, 1, MPI_INT, (world_rank + world_size - 1) % world_size,
+                      1, MPI_COMM_WORLD, &req[1], MPIX_QUEUE_CUDA_STREAM, &stream);
+
+    MPIX_Wait(&req[0], MPI_STATUS_IGNORE);
+    MPIX_Wait(&req[1], &status);
+
+    expected = (world_rank + world_size - 1) % world_size + 1;
+    if (recv != expected) {
+        printf("[%2d] Error: Sent %d, received %d, expected %d\n",
+                world_rank, send, recv, expected);
+        ++errs;
+    }
+
+    if (status.MPI_SOURCE != (world_rank + world_size - 1) % world_size) {
+        printf("Incorrect source in status: %d\n", status.MPI_SOURCE);
+        ++errs;
+    }
+    if (status.MPI_TAG != 1) {
+        printf("Incorrect tag in status: %d\n", status.MPI_TAG);
+        ++errs;
+    }
+    if (status.MPI_ERROR != MPI_SUCCESS) {
+        printf("Incorrect error in status: %d\n", status.MPI_ERROR);
         ++errs;
     }
 

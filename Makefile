@@ -2,19 +2,22 @@ NVCC ?= nvcc
 MPI_HOME ?= /usr
 NVCC_GENCODE ?= -gencode=arch=compute_80,code=sm_80
 
+MPI_ACX_PARTITIONED_SUPPORT ?= 1
+MPI_ACX_MEMOPS_V2 ?= 0
+
 NVCUFLAGS ?= -I$(MPI_HOME)/include -L$(MPI_HOME)/lib $(NVCC_GENCODE) -dc
 NVCUFLAGS += -Xcompiler -Wall,-Wextra,-Wno-unused-function,-Wno-unused-parameter
 NVCUFLAGS += -g
 #NVCUFLAGS += -DDEBUG
 
-ifeq ($(USE_MPI_PARTITIONED), 1)
-NVCUFLAGS += -DUSE_MPI_PARTITIONED
-endif
-
 SRCFILES = src/init.cpp \
            src/triggered.cpp \
-           src/sendrecv.cu \
-           src/partitioned.cu
+           src/sendrecv.cu
+
+ifeq ($(MPI_ACX_PARTITIONED_SUPPORT), 1)
+NVCUFLAGS += -DUSE_MPI_PARTITIONED
+SRCFILES += src/partitioned.cu
+endif
 
 OBJFILES  = $(patsubst %.c, %.o, $(filter %.c, $(SRCFILES)))
 OBJFILES += $(patsubst %.cpp, %.o, $(filter %.cpp, $(SRCFILES)))

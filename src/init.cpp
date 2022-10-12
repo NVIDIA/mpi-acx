@@ -80,9 +80,13 @@ static void progress_thread_fn(void) {
                         break;
 
                     case MPIACX_OP_PSEND:
+#ifdef USE_MPI_PARTITIONED
                         MPI_Pready(op->partitioned.partition, op->partitioned.request);
                         DEBUGMSG("Proxy [%zu]: Advanced Pready to issued\n", i);
                         mpiacx_state->flags[i] = MPIACX_OP_STATE_COMPLETED;
+#else
+                        ERRMSG("Proxy encountered a partitioned send, but partitioned support is disabled\n");
+#endif
                         break;
 
                     default:
@@ -98,12 +102,16 @@ static void progress_thread_fn(void) {
                 assert(op->kind != MPIACX_OP_PSEND);
 
                 if (op->kind == MPIACX_OP_PRECV) {
+#ifdef USE_MPI_PARTITIONED
                     MPI_Parrived(op->partitioned.request, op->partitioned.partition, &flag);
 
                     if (flag) {
                         DEBUGMSG("Proxy [%zu]: Parrived partition %d advanced to completed\n", i, op->partitioned.partition);
                         mpiacx_state->flags[i] = MPIACX_OP_STATE_COMPLETED;
                     }
+#else
+                        ERRMSG("Proxy encountered a partitioned recv, but partitioned support is disabled\n");
+#endif
                 }
                 else {
 
@@ -116,15 +124,16 @@ static void progress_thread_fn(void) {
 
                     MPI_Test(&op->sendrecv.request, &flag, &op->sendrecv.status_save);
 
-                    // If an on-stream wait was already posted, copy status to
-                    // the user's status object otherwise, status gets copied
-                    // in the call to MPIX_Wait*
-
-                    if (op->sendrecv.ireq != NULL && op->sendrecv.status != NULL)
-                        memcpy(op->sendrecv.status, &op->sendrecv.status_save, sizeof(MPI_Status));
-
                     if (flag) {
                         DEBUGMSG("Proxy [%zu]: Other op advanced to completed\n", i);
+
+                        // If an on-stream wait was already posted, copy status to
+                        // the user's status object. Otherwise, status gets copied
+                        // in the call to MPIX_Wait*
+
+                        if (op->sendrecv.ireq != NULL && op->sendrecv.status != NULL)
+                            memcpy(op->sendrecv.status, &op->sendrecv.status_save, sizeof(MPI_Status));
+
                         mpiacx_state->flags[i] = MPIACX_OP_STATE_COMPLETED;
                     }
 
@@ -176,7 +185,11 @@ int MPIX_Init(void) {
 
     if (!getenv("MPIACX_DISABLE_MEMOPS")) {
         CUDA_CHECK(cudaGetDevice(&device));
+#ifdef USE_MEMOPS_V2
+        can_memops = 1;
+#else
         CU_CHECK(cuDeviceGetAttribute(&can_memops, CU_DEVICE_ATTRIBUTE_CAN_USE_STREAM_MEM_OPS, device));
+#endif
 #ifdef FLUSH_REMOTE_WRITES
         CU_CHECK(cuDeviceGetAttribute(&can_flush, CU_DEVICE_ATTRIBUTE_CAN_FLUSH_REMOTE_WRITES, device));
 #endif
@@ -209,6 +222,10 @@ int MPIX_Init(void) {
 
     CUDA_CHECK(cudaHostGetDevicePointer((void**)&mpiacx_state->flags_d,
                                         (void *)mpiacx_state->flags, 0));
+
+    CU_CHECK_AND_JMP(err, out,
+            cuMemHostGetDevicePointer(&mpiacx_state->flags_d_ptr,
+                                      (void*) mpiacx_state->flags_d, 0));
 
     for (size_t i = 0; i < mpiacx_state->nflags; i++)
         mpiacx_state->flags[i] = MPIACX_OP_STATE_AVAILABLE;
