@@ -19,6 +19,10 @@ NVCUFLAGS += -DUSE_MPI_PARTITIONED
 SRCFILES += src/partitioned.cu
 endif
 
+ifeq ($(MPI_ACX_MEMOPS_V2), 1)
+NVCUFLAGS += -DUSE_MEMOPS_V2
+endif
+
 OBJFILES  = $(patsubst %.c, %.o, $(filter %.c, $(SRCFILES)))
 OBJFILES += $(patsubst %.cpp, %.o, $(filter %.cpp, $(SRCFILES)))
 OBJFILES += $(patsubst %.cu, %.o, $(filter %.cu, $(SRCFILES)))
