@@ -1,13 +1,14 @@
 NVCC ?= nvcc
 MPI_HOME ?= /usr
 NVCC_GENCODE ?= -gencode=arch=compute_80,code=sm_80
+EXTRA_LDFLAGS ?=
 
 MPI_ACX_PARTITIONED_SUPPORT ?= 1
 
 NVCUFLAGS ?= -I$(MPI_HOME)/include -L$(MPI_HOME)/lib $(NVCC_GENCODE)
 NVCUFLAGS += -Xcompiler -Wall,-Wextra,-Wno-unused-function,-Wno-unused-parameter -DDEBUG -g
 
-NVLDFLAGS += -L.. -lpthread -lcuda -lcudart -lmpi -lmpi-acx
+NVLDFLAGS += -L.. -lpthread -lcuda -lcudart -lmpi -lmpi-acx $(EXTRA_LDFLAGS)
 
 SRCFILES = src/ring.c \
            src/ring-all.c \
