@@ -12,6 +12,7 @@ NVLDFLAGS += -L.. -lpthread -lcuda -lcudart -lmpi -lmpi-acx $(EXTRA_LDFLAGS)
 
 SRCFILES = src/ring.c \
            src/ring-all.c \
+           src/ring-all-device.c \
            src/ring-all-graph.c \
            src/ring-all-graph-construction.c
 
