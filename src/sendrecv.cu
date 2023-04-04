@@ -505,7 +505,7 @@ int MPIX_Waitall_enqueue(int count, MPIX_Request *reqs, MPI_Status *statuses, in
             }
 
             if (num_memops > 0)
-                cu_ret = wrapBatchMemOp(stream, 2 * count, params, 0);
+                cu_ret = wrapBatchMemOp(stream, num_memops, params, 0);
 
             free(params);
 
